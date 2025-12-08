@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,20 @@ from pathlib import Path
 import click
 
 from .overlay import apply_governance_overlay, check_governance_overlay
+
+
+def find_specify_executable() -> str | None:
+    """Find the specify executable, checking common install locations.
+
+    Returns:
+        Path to specify executable or None if not found.
+    """
+    # First check if it's in PATH
+    specify_path = shutil.which("specify")
+    if specify_path:
+        return specify_path
+
+    return None
 
 
 @click.group(invoke_without_command=True)
@@ -30,11 +45,17 @@ def main(ctx: click.Context) -> None:
     is_flag=True,
     help="Skip Spec Kit init (apply overlay only to existing .specify)",
 )
-def init(dry_run: bool, force: bool, skip_speckit: bool) -> None:
+@click.option(
+    "--ai",
+    type=str,
+    default="copilot",
+    help="AI assistant (claude, gemini, copilot, etc.)",
+)
+def init(dry_run: bool, force: bool, skip_speckit: bool, ai: str) -> None:
     """Initialize repository with Spec Kit + Governance overlay.
 
     This command will:
-    1. Run 'specify init --here' if not skipped
+    1. Run 'specify init --here --ai <ai>' if not skipped
     2. Copy governance rules to .specify/memory/governance/
     3. Append rules to constitution.md
     """
@@ -45,33 +66,43 @@ def init(dry_run: bool, force: bool, skip_speckit: bool) -> None:
         if specify_dir.exists() and not force:
             click.echo("ℹ️  .specify/ already exists. Use --force to reinitialize.")
         else:
-            click.echo("📦 Running Spec Kit initialization...")
+            click.echo(f"📦 Running Spec Kit initialization (AI: {ai})...")
             if not dry_run:
-                # Try direct specify command first
-                result = subprocess.run(
-                    ["specify", "init", "--here", "--force"],
-                    capture_output=True,
-                    text=True,
-                )
+                specify_exe = find_specify_executable()
+                cmd: list[str]
+
+                if specify_exe:
+                    cmd = [
+                        specify_exe,
+                        "init",
+                        "--here",
+                        "--force",
+                        "--ai",
+                        ai,
+                        "--ignore-agent-tools",
+                    ]
+                else:
+                    # Fallback to uvx
+                    click.echo("   (specify not found, using uvx...)")
+                    cmd = [
+                        "uvx",
+                        "--from",
+                        "git+https://github.com/github/spec-kit.git",
+                        "specify",
+                        "init",
+                        "--here",
+                        "--force",
+                        "--ai",
+                        ai,
+                        "--ignore-agent-tools",
+                    ]
+
+                # Run without capturing output to preserve TTY for interactive prompts
+                result = subprocess.run(cmd, check=False)
+
                 if result.returncode != 0:
-                    # Fallback to uvx if specify not in PATH
-                    click.echo("   (specify not in PATH, trying uvx...)")
-                    result = subprocess.run(
-                        [
-                            "uvx",
-                            "--from",
-                            "git+https://github.com/github/spec-kit.git",
-                            "specify",
-                            "init",
-                            "--here",
-                            "--force",
-                        ],
-                        capture_output=True,
-                        text=True,
-                    )
-                    if result.returncode != 0:
-                        click.echo(f"❌ Spec Kit init failed: {result.stderr}", err=True)
-                        sys.exit(1)
+                    click.echo("❌ Spec Kit init failed.", err=True)
+                    sys.exit(1)
                 click.echo("✅ Spec Kit initialized.")
 
     # Step 2: Validate .specify exists
