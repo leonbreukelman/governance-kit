@@ -224,3 +224,23 @@ class TestConstitutionProtection:
 
         assert result.exit_code == 0
         assert "Governance overlay applied" in result.output
+
+    def test_handles_unreadable_constitution_safely(self, tmp_path: Path) -> None:
+        """Test that unreadable constitution is treated as customized for safety."""
+        from governance.cli import is_constitution_customized
+
+        # Create a constitution file
+        constitution = tmp_path / "constitution.md"
+        constitution.write_text("# My Project")
+
+        # Make it unreadable (simulate permission error)
+        import os
+        os.chmod(constitution, 0o000)
+
+        try:
+            # Should return True (assume customized) for safety
+            result = is_constitution_customized(constitution)
+            assert result is True
+        finally:
+            # Restore permissions for cleanup
+            os.chmod(constitution, 0o644)

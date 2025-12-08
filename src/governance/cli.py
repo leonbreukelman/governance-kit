@@ -42,7 +42,11 @@ def is_constitution_customized(constitution_path: Path) -> bool:
     if not constitution_path.exists():
         return False
 
-    content = constitution_path.read_text()
+    try:
+        content = constitution_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, PermissionError, OSError):
+        # If we can't read the file, assume it's customized to be safe
+        return True
 
     # Check for common template placeholders
     template_markers = [
@@ -80,10 +84,27 @@ def backup_specify_directory(specify_dir: Path) -> Path:
 
     Returns:
         Path to the backup directory
+
+    Raises:
+        OSError: If backup cannot be created due to filesystem issues
     """
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_path = specify_dir.parent / f".specify-backup-{timestamp}"
-    shutil.copytree(specify_dir, backup_path)
+
+    # Check if backup path already exists
+    if backup_path.exists():
+        # Add a suffix to make it unique
+        import time
+
+        suffix = int(time.time() * 1000) % 1000
+        backup_path = specify_dir.parent / f".specify-backup-{timestamp}-{suffix}"
+
+    try:
+        shutil.copytree(specify_dir, backup_path)
+    except (OSError, PermissionError) as e:
+        msg = f"Failed to create backup: {e}"
+        raise OSError(msg) from e
+
     return backup_path
 
 
@@ -171,8 +192,15 @@ def init(
                         err=True,
                     )
                     if not dry_run:
-                        backup_path = backup_specify_directory(specify_dir)
-                        click.echo(f"📦 Backed up .specify/ to {backup_path}")
+                        try:
+                            backup_path = backup_specify_directory(specify_dir)
+                            click.echo(f"📦 Backed up .specify/ to {backup_path}")
+                        except OSError as e:
+                            click.echo(f"❌ Failed to create backup: {e}", err=True)
+                            click.echo(
+                                "   Cannot proceed without backup. Aborting.", err=True
+                            )
+                            sys.exit(1)
 
             click.echo(f"📦 Running Spec Kit initialization (AI: {ai})...")
             if not dry_run:
