@@ -132,3 +132,95 @@ class TestMainHelp:
         assert "Governance-enhanced Spec Kit CLI" in result.output
         assert "init" in result.output
         assert "check" in result.output
+
+
+class TestConstitutionProtection:
+    """Tests for constitution.md data loss protection."""
+
+    def test_detects_customized_constitution(self, tmp_path: Path) -> None:
+        """Test that customized constitution is detected."""
+        from governance.cli import is_constitution_customized
+
+        constitution = tmp_path / "constitution.md"
+        
+        # Empty file is not customized
+        constitution.write_text("")
+        assert not is_constitution_customized(constitution)
+
+        # File with template placeholders is not customized
+        constitution.write_text("# [PROJECT_NAME]\n\n## [PRINCIPLE_1_NAME]")
+        assert not is_constitution_customized(constitution)
+
+        # File with actual content is customized
+        constitution.write_text("# My Project\n\n## Core Values\n\nWe value quality.")
+        assert is_constitution_customized(constitution)
+
+    def test_prevents_overwriting_customized_constitution(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Test that init refuses to overwrite customized constitution without --destroy-content."""
+        import os
+
+        # Setup: create .specify with customized constitution
+        specify_dir = tmp_path / ".specify"
+        memory_dir = specify_dir / "memory"
+        memory_dir.mkdir(parents=True)
+
+        constitution = memory_dir / "constitution.md"
+        constitution.write_text("# My Project\n\n## Core Values\n\nWe value quality.")
+
+        os.chdir(tmp_path)
+
+        # Try to run init with --force (should fail with protection)
+        result = runner.invoke(main, ["init", "--force"])
+
+        assert result.exit_code == 1
+        assert "WARNING" in result.output
+        assert "custom content" in result.output
+        assert "--skip-speckit" in result.output
+
+    def test_allows_overwrite_with_destroy_content_flag(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Test that --destroy-content flag allows overwrite with backup."""
+        import os
+
+        # Setup: create .specify with customized constitution
+        specify_dir = tmp_path / ".specify"
+        memory_dir = specify_dir / "memory"
+        memory_dir.mkdir(parents=True)
+
+        constitution = memory_dir / "constitution.md"
+        original_content = "# My Project\n\n## Core Values\n\nWe value quality."
+        constitution.write_text(original_content)
+
+        os.chdir(tmp_path)
+
+        # Run with --destroy-content flag (should create backup)
+        # Note: This will fail to actually run specify, but we're testing the backup logic
+        runner.invoke(main, ["init", "--force", "--destroy-content"])
+
+        # Check that backup was created
+        backup_dirs = list(tmp_path.glob(".specify-backup-*"))
+        assert len(backup_dirs) == 1
+        
+        # Verify backup contains original content
+        backup_constitution = backup_dirs[0] / "memory" / "constitution.md"
+        assert backup_constitution.read_text() == original_content
+
+    def test_skip_speckit_bypasses_protection(
+        self, runner: CliRunner, mock_specify_with_constitution: Path
+    ) -> None:
+        """Test that --skip-speckit bypasses the protection check."""
+        import os
+        os.chdir(mock_specify_with_constitution)
+
+        # Add custom content to constitution
+        constitution = mock_specify_with_constitution / ".specify" / "memory" / "constitution.md"
+        constitution.write_text("# My Project\n\n## Core Values\n\nWe value quality.")
+
+        # Should succeed with --skip-speckit
+        result = runner.invoke(main, ["init", "--skip-speckit"])
+
+        assert result.exit_code == 0
+        assert "Governance overlay applied" in result.output
