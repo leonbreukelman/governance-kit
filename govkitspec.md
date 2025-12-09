@@ -326,19 +326,19 @@ The following governance rules are **non-negotiable** and apply to all developme
 ### 4.1 Global Installation (Recommended)
 
 ```bash
-uv tool install git+https://github.com/your-org/governance-kit.git
+uv tool install git+https://github.com/leonbreukelman/governance-kit.git
 ```
 
 ### 4.2 Project-Local Installation
 
 ```bash
-uv pip install git+https://github.com/your-org/governance-kit.git
+uv pip install git+https://github.com/leonbreukelman/governance-kit.git
 ```
 
 ### 4.3 Development Installation
 
 ```bash
-git clone https://github.com/your-org/governance-kit
+git clone https://github.com/leonbreukelman/governance-kit
 cd governance-kit
 uv pip install -e .
 ```
@@ -409,7 +409,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
       
       - name: Install governance-kit
-        run: uv tool install git+https://github.com/your-org/governance-kit.git
+        run: uv tool install git+https://github.com/leonbreukelman/governance-kit.git
       
       - name: Check governance overlay
         run: governance check
