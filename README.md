@@ -6,10 +6,10 @@ Governance overlay for [GitHub Spec Kit](https://github.com/github/spec-kit). In
 
 ```bash
 # Global installation (recommended)
-uv tool install git+https://github.com/your-org/governance-kit.git
+uv tool install git+https://github.com/leonbreukelman/governance-kit.git
 
 # Or project-local
-uv pip install git+https://github.com/your-org/governance-kit.git
+uv pip install git+https://github.com/leonbreukelman/governance-kit.git
 ```
 
 ## Usage
@@ -52,7 +52,7 @@ Edit the files in `.specify/memory/governance/`:
 ## Development
 
 ```bash
-git clone https://github.com/your-org/governance-kit
+git clone https://github.com/leonbreukelman/governance-kit
 cd governance-kit
 uv sync
 uv run pytest tests/ -v
